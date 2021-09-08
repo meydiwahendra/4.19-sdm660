@@ -843,4 +843,6 @@ config GUP_BENCHMARK
 config ARCH_HAS_PTE_SPECIAL
 	bool
 
+source "mm/damon/Kconfig"
+
 endmenu
