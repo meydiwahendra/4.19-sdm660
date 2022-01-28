@@ -46,28 +46,7 @@ static int convert_prio(int prio)
 }
 
 /**
- * drop_nopreempt_cpus - remove a cpu from the mask if it is likely
- *			 non-preemptible
- * @lowest_mask: mask with selected CPUs (non-NULL)
- */
-static void
-drop_nopreempt_cpus(struct cpumask *lowest_mask)
-{
-	unsigned int cpu = cpumask_first(lowest_mask);
-
-	while (cpu < nr_cpu_ids) {
-		/* unlocked access */
-		struct task_struct *task = READ_ONCE(cpu_rq(cpu)->curr);
-
-		if (task_may_not_preempt(task, cpu))
-			cpumask_clear_cpu(cpu, lowest_mask);
-
-		cpu = cpumask_next(cpu, lowest_mask);
-	}
-}
-
-/**
- * cpupri_find - find the best (lowest-pri) CPU in the system
+ * cpupri_find_fitness - find the best (lowest-pri) CPU in the system
  * @cp: The cpupri context
  * @p: The task
  * @lowest_mask: A mask to fill in with selected CPUs (or NULL)
@@ -86,17 +65,26 @@ int cpupri_find(struct cpupri *cp, struct task_struct *p,
 {
 	int idx = 0;
 	int task_pri = convert_prio(p->prio);
-	bool drop_nopreempts = task_pri <= MAX_RT_PRIO;
+	int idx, cpu;
 
 	BUG_ON(task_pri >= CPUPRI_NR_PRIORITIES);
 
-retry:
 	for (idx = 0; idx < task_pri; idx++) {
 		struct cpupri_vec *vec  = &cp->pri_to_cpu[idx];
 		int skip = 0;
 
-		if (!atomic_read(&(vec)->count))
-			skip = 1;
+		if (!__cpupri_find(cp, p, lowest_mask, idx))
+			continue;
+
+		if (!lowest_mask || !fitness_fn)
+			return 1;
+
+		/* Ensure the capacity of the CPUs fit the task */
+		for_each_cpu(cpu, lowest_mask) {
+			if (!fitness_fn(p, cpu))
+				cpumask_clear_cpu(cpu, lowest_mask);
+		}
+
 		/*
 		 * When looking at the vector, we need to read the counter,
 		 * do a memory barrier, then read the mask.
@@ -145,13 +133,25 @@ retry:
 		return 1;
 	}
 	/*
-	 * If we can't find any non-preemptible cpu's, retry so we can
-	 * find the lowest priority target and avoid priority inversion.
+	 * If we failed to find a fitting lowest_mask, kick off a new search
+	 * but without taking into account any fitness criteria this time.
+	 *
+	 * This rule favours honouring priority over fitting the task in the
+	 * correct CPU (Capacity Awareness being the only user now).
+	 * The idea is that if a higher priority task can run, then it should
+	 * run even if this ends up being on unfitting CPU.
+	 *
+	 * The cost of this trade-off is not entirely clear and will probably
+	 * be good for some workloads and bad for others.
+	 *
+	 * The main idea here is that if some CPUs were overcommitted, we try
+	 * to spread which is what the scheduler traditionally did. Sys admins
+	 * must do proper RT planning to avoid overloading the system if they
+	 * really care.
 	 */
-	if (drop_nopreempts) {
-		drop_nopreempts = false;
-		goto retry;
-	}
+	if (fitness_fn)
+		return cpupri_find(cp, p, lowest_mask);
+
 	return 0;
 }
 
