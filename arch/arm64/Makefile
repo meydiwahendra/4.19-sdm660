@@ -64,7 +64,7 @@ endif
 
 ifeq ($(CONFIG_ARCH_SDM660), y)
 ifeq ($(cc-name),clang)
-KBUILD_CFLAGS	+= -mcpu=cortex-a53 -mtune=cortex-a53
+KBUILD_CFLAGS	+= -mtune=cortex-a53 -march=armv8.1-a+crypto+fp16+rcpc
 endif
 endif
 
