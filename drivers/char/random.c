@@ -874,7 +874,7 @@ void add_hwgenerator_randomness(const char *buf, size_t len, size_t entropy)
 	 * we're not yet initialized.
 	 */
 	if ((current->flags & PF_KTHREAD) &&
-	    !kthread_should_stop() && crng_ready())
+	    !kthread_should_stop() && (crng_ready() || !entropy))
 		schedule_timeout_interruptible(CRNG_RESEED_INTERVAL);
 }
 EXPORT_SYMBOL_GPL(add_hwgenerator_randomness);
