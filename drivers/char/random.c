@@ -894,7 +894,7 @@ struct fast_pool {
 	unsigned long pool[4];
 	unsigned long last;
 	unsigned int count;
-	struct work_struct mix;
+	struct timer_list mix;
 };
 
 static void mix_interrupt_randomness(struct timer_list *work);
