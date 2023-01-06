@@ -65,7 +65,8 @@ out:
 	put_page(page);
 }
 
-static void __damon_pa_prepare_access_check(struct damon_region *r)
+static void __damon_pa_prepare_access_check(struct damon_ctx *ctx,
+					    struct damon_region *r)
 {
 	r->sampling_addr = damon_rand(r->ar.start, r->ar.end);
 
@@ -79,7 +80,7 @@ static void damon_pa_prepare_access_checks(struct damon_ctx *ctx)
 
 	damon_for_each_target(t, ctx) {
 		damon_for_each_region(r, t)
-			__damon_pa_prepare_access_check(r);
+			__damon_pa_prepare_access_check(ctx, r);
 	}
 }
 
@@ -235,8 +236,7 @@ static unsigned long damon_pa_pageout(struct damon_region *r)
 	return applied * PAGE_SIZE;
 }
 
-static inline unsigned long damon_pa_mark_accessed_or_deactivate(
-		struct damon_region *r, bool mark_accessed)
+static unsigned long damon_pa_mark_accessed(struct damon_region *r)
 {
 	unsigned long addr, applied = 0;
 
@@ -245,24 +245,27 @@ static inline unsigned long damon_pa_mark_accessed_or_deactivate(
 
 		if (!page)
 			continue;
-		if (mark_accessed)
-			mark_page_accessed(page);
-		else
-			deactivate_page(page);
+		mark_page_accessed(page);
 		put_page(page);
 		applied++;
 	}
 	return applied * PAGE_SIZE;
 }
 
-static unsigned long damon_pa_mark_accessed(struct damon_region *r)
-{
-	return damon_pa_mark_accessed_or_deactivate(r, true);
-}
-
 static unsigned long damon_pa_deactivate_pages(struct damon_region *r)
 {
-	return damon_pa_mark_accessed_or_deactivate(r, false);
+	unsigned long addr, applied = 0;
+
+	for (addr = r->ar.start; addr < r->ar.end; addr += PAGE_SIZE) {
+		struct page *page = damon_get_page(PHYS_PFN(addr));
+
+		if (!page)
+			continue;
+		deactivate_page(page);
+		put_page(page);
+		applied++;
+	}
+	return applied * PAGE_SIZE;
 }
 
 static unsigned long damon_pa_apply_scheme(struct damon_ctx *ctx,
@@ -276,10 +279,7 @@ static unsigned long damon_pa_apply_scheme(struct damon_ctx *ctx,
 		return damon_pa_mark_accessed(r);
 	case DAMOS_LRU_DEPRIO:
 		return damon_pa_deactivate_pages(r);
-	case DAMOS_STAT:
-		break;
 	default:
-		/* DAMOS actions that not yet supported by 'paddr'. */
 		break;
 	}
 	return 0;
