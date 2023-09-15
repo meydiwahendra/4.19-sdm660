@@ -695,40 +695,45 @@ static void f2fs_sb_release(struct kobject *kobj)
 	complete(&sbi->s_kobj_unregister);
 }
 
-/*
- * Note that there are three feature list entries:
- * 1) /sys/fs/f2fs/features
- *   : shows runtime features supported by in-kernel f2fs along with Kconfig.
- *     - ref. F2FS_FEATURE_RO_ATTR()
- *
- * 2) /sys/fs/f2fs/$s_id/features <deprecated>
- *   : shows on-disk features enabled by mkfs.f2fs, used for old kernels. This
- *     won't add new feature anymore, and thus, users should check entries in 3)
- *     instead of this 2).
- *
- * 3) /sys/fs/f2fs/$s_id/feature_list
- *   : shows on-disk features enabled by mkfs.f2fs per instance, which follows
- *     sysfs entry rule where each entry should expose single value.
- *     This list covers old feature list provided by 2) and beyond. Therefore,
- *     please add new on-disk feature in this list only.
- *     - ref. F2FS_SB_FEATURE_RO_ATTR()
- */
+enum feat_id {
+	FEAT_CRYPTO = 0,
+	FEAT_BLKZONED,
+	FEAT_ATOMIC_WRITE,
+	FEAT_EXTRA_ATTR,
+	FEAT_PROJECT_QUOTA,
+	FEAT_INODE_CHECKSUM,
+	FEAT_FLEXIBLE_INLINE_XATTR,
+	FEAT_QUOTA_INO,
+	FEAT_INODE_CRTIME,
+	FEAT_LOST_FOUND,
+	FEAT_VERITY,
+	FEAT_SB_CHECKSUM,
+	FEAT_CASEFOLD,
+	FEAT_COMPRESSION,
+	FEAT_TEST_DUMMY_ENCRYPTION_V2,
+	FEAT_ENCRYPTED_CASEFOLD,
+};
+
 static ssize_t f2fs_feature_show(struct f2fs_attr *a,
 		struct f2fs_sb_info *sbi, char *buf)
 {
-	return sprintf(buf, "supported\n");
-}
-
-#define F2FS_FEATURE_RO_ATTR(_name)				\
-static struct f2fs_attr f2fs_attr_##_name = {			\
-	.attr = {.name = __stringify(_name), .mode = 0444 },	\
-	.show	= f2fs_feature_show,				\
-}
-
-static ssize_t f2fs_sb_feature_show(struct f2fs_attr *a,
-		struct f2fs_sb_info *sbi, char *buf)
-{
-	if (F2FS_HAS_FEATURE(sbi, a->id))
+	switch (a->id) {
+	case FEAT_CRYPTO:
+	case FEAT_BLKZONED:
+	case FEAT_ATOMIC_WRITE:
+	case FEAT_EXTRA_ATTR:
+	case FEAT_PROJECT_QUOTA:
+	case FEAT_INODE_CHECKSUM:
+	case FEAT_FLEXIBLE_INLINE_XATTR:
+	case FEAT_QUOTA_INO:
+	case FEAT_INODE_CRTIME:
+	case FEAT_LOST_FOUND:
+	case FEAT_VERITY:
+	case FEAT_SB_CHECKSUM:
+	case FEAT_CASEFOLD:
+	case FEAT_COMPRESSION:
+	case FEAT_TEST_DUMMY_ENCRYPTION_V2:
+	case FEAT_ENCRYPTED_CASEFOLD:
 		return sprintf(buf, "supported\n");
 	return sprintf(buf, "unsupported\n");
 }
@@ -844,10 +849,10 @@ F2FS_GENERAL_RO_ATTR(avg_vblocks);
 #endif
 
 #ifdef CONFIG_FS_ENCRYPTION
-F2FS_FEATURE_RO_ATTR(encryption);
-F2FS_FEATURE_RO_ATTR(test_dummy_encryption_v2);
+F2FS_FEATURE_RO_ATTR(encryption, FEAT_CRYPTO);
+F2FS_FEATURE_RO_ATTR(test_dummy_encryption_v2, FEAT_TEST_DUMMY_ENCRYPTION_V2);
 #ifdef CONFIG_UNICODE
-F2FS_FEATURE_RO_ATTR(encrypted_casefold);
+F2FS_FEATURE_RO_ATTR(encrypted_casefold, FEAT_ENCRYPTED_CASEFOLD);
 #endif
 #endif /* CONFIG_FS_ENCRYPTION */
 #ifdef CONFIG_BLK_DEV_ZONED
